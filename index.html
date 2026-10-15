@@ -578,10 +578,21 @@ function startBar(ms){
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 S.voice=false;S.limit=5000;S.rec=null;
 function stopRec(){ if(S.rec){const r=S.rec;S.rec=null;try{r.onend=null;r.onresult=null;r.abort()}catch(e){}} }
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=Array.from({length:n+1},(_,j)=>j),c=new Array(n+1);
+  for(let i=1;i<=m;i++){c[0]=i;for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));[p,c]=[c,p]}return p[n]}
 function judgeVoice(t,q){
   if(judge(t,q))return true;
-  const n=norm(t);
-  return q.ok.concat([q.a]).some(o=>{const m=norm(o);return m.length>=2&&n.includes(m)});
+  const n=norm(t);if(!n)return false;
+  const cands=q.ok.concat([q.a]).map(norm).filter(m=>m.length>=2);
+  if(cands.some(m=>n.includes(m)))return true;
+  // 音声認識の表記ゆれ対策：4文字以上の正解は、1文字（8文字以上は2文字）までの違いを許す
+  for(const m of cands){
+    if(m.length<4)continue;const tol=m.length>=8?2:1;
+    for(let i=0;i+m.length-tol<=n.length;i++){
+      for(const L of [m.length-1,m.length,m.length+1]){if(L<=0||i+L>n.length)continue;if(lev(n.slice(i,i+L),m)<=tol)return true}
+    }
+  }
+  return false;
 }
 function micMsg(t){$("mic").hidden=!S.voice;$("micText").textContent=t}
 function startRec(){
@@ -589,21 +600,29 @@ function startRec(){
   stopRec();
   const r=new SR();r.lang="ja-JP";r.interimResults=true;r.continuous=true;r.maxAlternatives=5;
   r.onresult=ev=>{
-    let latest="",final=false;
-    for(let i=ev.resultIndex;i<ev.results.length;i++){latest=ev.results[i][0].transcript;final=ev.results[i].isFinal}
+    // 押した後に届いた結果だけを対象に、全候補・全区間をまとめて判定する
+    let latest="";S.recCount=0;
+    for(let i=0;i<ev.results.length;i++){if(ev.results[i].isFinal)S.recCount=i+1}
+    for(let i=ev.resultIndex;i<ev.results.length;i++)latest=ev.results[i][0].transcript;
     micMsg(latest);
     if(S.phase!=="buzzed")return;
     const q=S.deck[S.idx];
-    let best="";
-    for(let i=ev.resultIndex;i<ev.results.length;i++){
+    const from=Math.min(S.buzzIdx,ev.results.length-1);
+    let best="",hit="";
+    for(let i=from;i<ev.results.length&&!hit;i++){
       const res=ev.results[i];
-      for(let k=0;k<res.length;k++){const t=res[k].transcript;if(judgeVoice(t,q)){best=t;break}}
-      if(best)break;
-      best=res[0].transcript;
+      for(let k=0;k<res.length;k++){const t=res[k].transcript;if(judgeVoice(t,q)){hit=t;break}}
+      best=res[0].transcript||best;
     }
-    $("ans").value=best;
-    if(judgeVoice(best,q)){finish(true,best)}
-    else if(final){clearTimeout(S.retry);S.retry=setTimeout(()=>{if(S.phase==="buzzed")finish(false,best)},1500)}
+    // 複数区間に分かれた場合は連結しても試す
+    if(!hit){let all="";for(let i=from;i<ev.results.length;i++)all+=ev.results[i][0].transcript;if(judgeVoice(all,q))hit=all}
+    $("ans").value=hit||best;
+    if(hit){finish(true,hit)}
+    else{
+      // 不正解っぽくても即×にしない。確定後2秒言い直しがなければ×（制限時間が先なら時間切れ判定）
+      const lastFinal=ev.results[ev.results.length-1].isFinal;
+      if(lastFinal&&best){clearTimeout(S.retry);S.retry=setTimeout(()=>{if(S.phase==="buzzed")finish(false,best)},2000)}
+    }
   };
   r.onstart=()=>micMsg("（聞き取り中）");
   r.onerror=ev=>{
@@ -613,7 +632,7 @@ function startRec(){
   };
   // 無音などで勝手に終わったら、読み上げ中・解答中なら立ち上げ直す
   r.onend=()=>{ if(S.rec===r){S.rec=null;if(S.voice&&(S.phase==="reading"||S.phase==="readend"||S.phase==="buzzed"))setTimeout(startRec,100)} };
-  S.rec=r;try{r.start()}catch(e){S.rec=null;micMsg("起動失敗: "+e.message)}
+  S.recCount=0;S.buzzIdx=0;S.rec=r;try{r.start()}catch(e){S.rec=null;micMsg("起動失敗: "+e.message)}
 }
 function buzz(){
   if(S.phase!=="reading"&&S.phase!=="readend")return;
@@ -623,7 +642,7 @@ function buzz(){
   const sec=S.limit/1000;
   setState("warn",`押した！（${S.buzzPos}%地点）${S.voice&&SR?"声で":""}${sec}秒以内に解答`);
   $("ans").value="";
-  if(S.voice&&SR){if(!S.rec)startRec();micMsg("どうぞ")}else{$("ans").focus()}
+  if(S.voice&&SR){S.buzzIdx=S.recCount||0;if(!S.rec)startRec();micMsg("どうぞ")}else{$("ans").focus()}
   startBar(S.limit);
   S.answerTimer=setTimeout(()=>{const v=$("ans").value;finish(v?judge(v,S.deck[S.idx]):false,v||"時間切れ")},S.limit);
 }
@@ -700,7 +719,9 @@ $("tlim").onclick=()=>{
 };
 // --- 効果音（WebAudioで合成。音源ファイル不要）---
 S.sound=true;let AC=null;
-function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==="suspended")AC.resume();return AC}
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state!=="running"){try{AC.resume()}catch(e){}}return AC}
+// 最初の操作で音声を有効化（スマホはユーザー操作なしに音が出ない）
+["pointerdown","keydown","touchend"].forEach(ev=>document.addEventListener(ev,()=>ac(),{passive:true}));
 function tone(f,t0,dur,type="square",vol=.18){
   const c=ac();if(!c)return;const o=c.createOscillator(),g=c.createGain();
   o.type=type;o.frequency.setValueAtTime(f,c.currentTime+t0);
@@ -716,7 +737,12 @@ const SFX={
   win(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>tone(f,i*.11,.14,"square",.16))},
   lose(){[392,370,349,330].forEach((f,i)=>tone(f,i*.18,.22,"sawtooth",.1))},
 };
-function play(k){if(S.sound&&SFX[k])SFX[k]()}
+function play(k){
+  if(!S.sound||!SFX[k])return;
+  const c=ac();if(!c)return;
+  if(c.state==="running")SFX[k]();
+  else c.resume().then(()=>SFX[k]()).catch(()=>{});
+}
 $("snd").onclick=()=>{S.sound=!S.sound;$("snd").setAttribute("aria-pressed",S.sound);if(S.sound)play("buzz")};
 document.addEventListener("keydown",e=>{
   if(e.target===$("ans"))return;
