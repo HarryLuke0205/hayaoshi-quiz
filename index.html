@@ -1,0 +1,443 @@
+<title>早押しクイズ道場</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Shippori+Mincho:wght@600;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one dark stage like a quiz hall. Question board on top, buzzer row, answer line, scoreboard pinned to the side on desktop. */
+:root{
+  --bg:#f3f1ea; --panel:#ffffff; --fg:#1a1b20; --muted:#6b6a65; --line:#dad7cc;
+  --accent:#c8102e; --accent-fg:#ffffff; --gold:#b8860b; --good:#1f8a4c; --bad:#c8102e; --warn:#b36b00;
+  --display:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141518; --panel:#1e2025; --fg:#f0eee8; --muted:#9a9890; --line:#33363d;
+  --accent:#e3253f; --gold:#e0b047; --good:#3fb36f; --bad:#ff5566; --warn:#f0a030; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141518; --panel:#1e2025; --fg:#f0eee8; --muted:#9a9890; --line:#33363d;
+  --accent:#e3253f; --gold:#e0b047; --good:#3fb36f; --bad:#ff5566; --warn:#f0a030; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px}
+*{box-sizing:border-box}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:16px;grid-template-columns:1fr 240px}
+@media(max-width:760px){.wrap{grid-template-columns:1fr}}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;border-bottom:2px solid var(--fg);padding-bottom:8px}
+header h1{font-family:var(--display);font-weight:800;font-size:1.6rem;margin:0;letter-spacing:.04em}
+header .sub{color:var(--muted);font-size:.85rem}
+header .mode{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 12px;font-size:.8rem;color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+main{min-width:0;display:grid;gap:14px;align-content:start}
+.board{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:22px;min-height:220px;display:grid;align-content:start;gap:12px;position:relative}
+.qnum{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.8rem;color:var(--muted);letter-spacing:.06em}
+.genre{color:var(--gold);font-weight:700}
+.qtext{font-family:var(--display);font-weight:600;font-size:clamp(1.25rem,2.6vw,1.75rem);line-height:1.75;min-height:4.5em;text-wrap:pretty}
+.qtext .cur{border-right:.1em solid var(--accent);animation:blink 1s steps(2) infinite}
+@media(prefers-reduced-motion:reduce){.qtext .cur{animation:none}}
+@keyframes blink{50%{border-color:transparent}}
+.mic{font-size:.85rem;color:var(--muted);font-family:var(--mono)}
+.state{font-size:.9rem;color:var(--muted);min-height:1.5em}
+.state.good{color:var(--good);font-weight:700}
+.state.bad{color:var(--bad);font-weight:700}
+.state.warn{color:var(--warn);font-weight:700}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.buzz{flex:1 1 220px;background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;font-size:1.4rem;font-weight:900;padding:18px;letter-spacing:.2em;box-shadow:0 4px 0 color-mix(in srgb,var(--accent) 60%,black)}
+.buzz:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--accent) 60%,black)}
+.buzz:disabled{opacity:.35;cursor:default;box-shadow:none}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 16px;color:var(--fg);font-weight:500}
+.btn:hover{border-color:var(--fg)}
+.btn:disabled{opacity:.4;cursor:default}
+.answer{display:flex;gap:8px}
+.answer input{flex:1;min-width:0;font-size:1.15rem;padding:12px 14px;border:2px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);font-family:var(--body)}
+.answer input:disabled{opacity:.5}
+.timer{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.timer i{display:block;height:100%;width:100%;background:var(--warn);transform-origin:left;transition:transform .1s linear}
+aside{display:grid;gap:12px;align-content:start}
+.score{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+.score h2{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:700}
+.marks{display:flex;gap:4px;flex-wrap:wrap;font-family:var(--mono);font-size:1.1rem}
+.marks b{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);font-weight:500}
+.marks b.o{color:var(--good);border-color:var(--good)}
+.marks b.x{color:var(--bad);border-color:var(--bad)}
+.big{font-family:var(--mono);font-size:1.6rem;font-variant-numeric:tabular-nums;display:flex;gap:14px}
+.big span{color:var(--muted);font-size:.8rem;display:block}
+.stats{font-size:.85rem;color:var(--muted);line-height:1.8;font-variant-numeric:tabular-nums}
+.help{font-size:.8rem;color:var(--muted);line-height:1.7}
+kbd{font-family:var(--mono);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:.75rem}
+.log{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:6px}
+.log h2{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:700}
+.log ol{margin:0;padding-left:1.4em;font-size:.9rem;display:grid;gap:4px}
+.log li span{color:var(--muted)}
+.log li.o::marker{color:var(--good)}.log li.x::marker{color:var(--bad)}
+.result{background:var(--panel);border:2px solid var(--gold);border-radius:6px;padding:22px;display:grid;gap:10px;text-align:center}
+.result h2{font-family:var(--display);font-size:1.8rem;margin:0}
+.result p{margin:0;color:var(--muted)}
+.reading{font-size:.9rem;color:var(--muted)}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>早押しクイズ道場</h1>
+  <span class="sub">abc／EQIDEN形式の基本問題で早押し練習</span>
+  <div class="mode" role="group" aria-label="ルール">
+    <button class="chip" id="m73" aria-pressed="true">7○3×</button>
+    <button class="chip" id="m10" aria-pressed="false">10問通し</button>
+    <button class="chip" id="mFree" aria-pressed="false">エンドレス</button>
+    <button class="chip" id="voice" aria-pressed="false">🎤 声で解答</button>
+    <button class="chip" id="tlim" aria-pressed="false">解答5秒</button>
+    <button class="chip" id="snd" aria-pressed="true">🔊 効果音</button>
+  </div>
+</header>
+
+<main>
+  <div class="board">
+    <div class="qnum"><span id="qLabel">第1問</span><span class="genre" id="qGenre">—</span></div>
+    <div class="qtext" id="qText"><span class="cur"></span></div>
+    <div class="timer" hidden id="timer"><i id="timerBar"></i></div>
+    <div class="mic" id="mic" hidden>🎤 <span id="micText"></span></div>
+    <div class="state" id="state">「出題」を押すか <kbd>Enter</kbd> で開始。読み上げ中に <kbd>Space</kbd> で早押し。</div>
+  </div>
+  <div class="row">
+    <button class="btn" id="btnStart">出題</button>
+    <button class="buzz" id="btnBuzz" disabled>押す</button>
+    <button class="btn" id="btnPass" disabled>スルー</button>
+  </div>
+  <form class="answer" id="form">
+    <input id="ans" placeholder="解答を入力して Enter" autocomplete="off" disabled>
+    <button class="btn" id="btnAns" type="submit" disabled>解答</button>
+  </form>
+  <div id="resultBox" class="result" hidden>
+    <h2 id="resTitle"></h2>
+    <p id="resBody"></p>
+    <div class="row" style="justify-content:center"><button class="btn" id="btnAgain">もう一度</button></div>
+  </div>
+  <div class="log"><h2>出題履歴</h2><ol id="log"></ol></div>
+</main>
+
+<aside>
+  <div class="score">
+    <h2>スコア</h2>
+    <div class="big"><div><span>正解</span><b id="sO">0</b></div><div><span>誤答</span><b id="sX">0</b></div><div><span>勝ち抜け</span><b id="sWin">7</b></div></div>
+    <div class="marks" id="marks" style="margin-top:8px"></div>
+  </div>
+  <div class="score">
+    <h2>記録</h2>
+    <div class="stats">
+      平均押し位置 <b id="stPos">—</b><br>
+      出題数 <b id="stN">0</b> ／ 正答率 <b id="stRate">—</b><br>
+      問題プール <b id="stPool">0</b> 問
+    </div>
+  </div>
+  <div class="score help">
+    <h2>操作</h2>
+    <kbd>Enter</kbd> 出題 ／ <kbd>Space</kbd> 押す<br>
+    押したら制限時間内に入力して <kbd>Enter</kbd><br>
+    「声で解答」をオンにするとマイクが常時聞き取り、押したあとの発話で自動判定。正解が含まれていれば○<br>
+    誤答すると残りの問題文と正解を表示<br>
+    読み終えて10秒で未解答はスルー扱い（×にはなりません）<br>
+    別解・ひらがな・カタカナでも正解扱い
+  </div>
+</aside>
+</div>
+
+<script>
+// q: 問題文  a: 正解表示  ok: 正解として受け付ける表記（読みを含む）  g: ジャンル
+const QUESTIONS = [
+{g:"地理",q:"日本の都道府県で、面積が最も大きいのは北海道ですが、最も小さいのはどこでしょう？",a:"香川県",ok:["香川県","香川","かがわ","かがわけん"]},
+{g:"地理",q:"世界で最も長い川はナイル川ですが、流域面積が世界最大の川は何でしょう？",a:"アマゾン川",ok:["アマゾン川","アマゾン","あまぞん","あまぞんがわ"]},
+{g:"地理",q:"オーストラリアの首都はどこでしょう？",a:"キャンベラ",ok:["キャンベラ","きゃんべら"]},
+{g:"地理",q:"富士山の標高は3776メートルですが、日本で2番目に高い山は何でしょう？",a:"北岳",ok:["北岳","きただけ"]},
+{g:"地理",q:"県庁所在地を松山市とする、みかんの生産で知られる四国の県はどこでしょう？",a:"愛媛県",ok:["愛媛県","愛媛","えひめ","えひめけん"]},
+{g:"地理",q:"ヨーロッパの国で、首都をアムステルダムとする国はどこでしょう？",a:"オランダ",ok:["オランダ","おらんだ","ネーデルラント"]},
+{g:"地理",q:"世界で最も面積の小さい国はバチカン市国ですが、最も面積の大きい国はどこでしょう？",a:"ロシア",ok:["ロシア","ろしあ","ロシア連邦"]},
+{g:"地理",q:"日本最大の湖は琵琶湖ですが、2番目に大きい湖で茨城県にあるのは何でしょう？",a:"霞ヶ浦",ok:["霞ヶ浦","霞ケ浦","かすみがうら"]},
+{g:"歴史",q:"1600年、徳川家康率いる東軍と石田三成率いる西軍が戦った、「天下分け目」と呼ばれる戦いは何でしょう？",a:"関ヶ原の戦い",ok:["関ヶ原の戦い","関ケ原の戦い","関ヶ原","せきがはら","せきがはらのたたかい"]},
+{g:"歴史",q:"鎌倉幕府を開いた初代将軍は誰でしょう？",a:"源頼朝",ok:["源頼朝","みなもとのよりとも","頼朝"]},
+{g:"歴史",q:"1492年、スペインの支援を受けて大西洋を横断し、アメリカ大陸に到達した航海者は誰でしょう？",a:"コロンブス",ok:["コロンブス","ころんぶす","クリストファー・コロンブス"]},
+{g:"歴史",q:"1543年、ポルトガル人によって日本に鉄砲が伝えられた鹿児島県の島はどこでしょう？",a:"種子島",ok:["種子島","たねがしま"]},
+{g:"歴史",q:"フランス革命のきっかけとなった1789年の事件で、襲撃された牢獄の名前は何でしょう？",a:"バスティーユ牢獄",ok:["バスティーユ牢獄","バスティーユ","ばすてぃーゆ"]},
+{g:"歴史",q:"平安時代、「源氏物語」を書いた女性作家は誰でしょう？",a:"紫式部",ok:["紫式部","むらさきしきぶ"]},
+{g:"歴史",q:"江戸時代の鎖国中、唯一ヨーロッパとの貿易が許されていた長崎の人工島は何でしょう？",a:"出島",ok:["出島","でじま"]},
+{g:"歴史",q:"1969年、人類で初めて月面に降り立ったアメリカの宇宙飛行士は誰でしょう？",a:"ニール・アームストロング",ok:["アームストロング","あーむすとろんぐ","ニール・アームストロング","ニールアームストロング"]},
+{g:"理科",q:"水を電気分解すると、陽極から発生する気体は何でしょう？",a:"酸素",ok:["酸素","さんそ","O2"]},
+{g:"理科",q:"元素記号「Fe」で表される金属は何でしょう？",a:"鉄",ok:["鉄","てつ"]},
+{g:"理科",q:"太陽系の惑星のうち、最も大きいのは何でしょう？",a:"木星",ok:["木星","もくせい"]},
+{g:"理科",q:"ヒトの血液型をABO式で分けたとき、日本人に最も多い血液型は何型でしょう？",a:"A型",ok:["A型","A","えーがた","エー型"]},
+{g:"理科",q:"光の三原色といえば、赤・緑ともう1つは何でしょう？",a:"青",ok:["青","あお","ブルー"]},
+{g:"理科",q:"音の速さは空気中でおよそ秒速340メートルですが、光の速さはおよそ秒速何キロメートルでしょう？",a:"30万キロメートル",ok:["30万","30万キロ","30万キロメートル","300000","さんじゅうまん"]},
+{g:"理科",q:"植物が光を使って水と二酸化炭素から養分をつくるはたらきを何というでしょう？",a:"光合成",ok:["光合成","こうごうせい"]},
+{g:"理科",q:"「万有引力の法則」を発見したイギリスの科学者は誰でしょう？",a:"ニュートン",ok:["ニュートン","にゅーとん","アイザック・ニュートン"]},
+{g:"理科",q:"水が凍る温度は摂氏0度ですが、1気圧のもとで水が沸騰する温度は摂氏何度でしょう？",a:"100度",ok:["100度","100","ひゃくど","百度"]},
+{g:"文学",q:"「吾輩は猫である」「坊っちゃん」などの作品で知られる明治の文豪は誰でしょう？",a:"夏目漱石",ok:["夏目漱石","なつめそうせき","漱石"]},
+{g:"文学",q:"「走れメロス」「人間失格」などの作品で知られる作家は誰でしょう？",a:"太宰治",ok:["太宰治","だざいおさむ","太宰"]},
+{g:"文学",q:"五・七・五の十七音からなる日本の定型詩を何というでしょう？",a:"俳句",ok:["俳句","はいく"]},
+{g:"文学",q:"松尾芭蕉が東北・北陸をめぐる旅を記した紀行文は何でしょう？",a:"おくのほそ道",ok:["おくのほそ道","奥の細道","おくのほそみち"]},
+{g:"文学",q:"「ロミオとジュリエット」「ハムレット」などの戯曲を書いたイギリスの劇作家は誰でしょう？",a:"シェイクスピア",ok:["シェイクスピア","シェークスピア","しぇいくすぴあ","ウィリアム・シェイクスピア"]},
+{g:"文学",q:"「羅生門」「蜘蛛の糸」などの作品で知られ、その名を冠した文学賞もある作家は誰でしょう？",a:"芥川龍之介",ok:["芥川龍之介","あくたがわりゅうのすけ","芥川"]},
+{g:"文学",q:"自身も飛行士であり、「星の王子さま」を書いたフランスの作家は誰でしょう？",a:"サン＝テグジュペリ",ok:["サン＝テグジュペリ","サンテグジュペリ","さんてぐじゅぺり","サン・テグジュペリ"]},
+{g:"文学",q:"「吾輩は猫である」の猫には名前がありませんが、「坊っちゃん」で主人公に慕われる下女の名前は何でしょう？",a:"清",ok:["清","きよ"]},
+{g:"社会",q:"日本国憲法の三大原則といえば、国民主権・基本的人権の尊重と、あと1つは何でしょう？",a:"平和主義",ok:["平和主義","へいわしゅぎ"]},
+{g:"社会",q:"国会・内閣・裁判所がそれぞれ立法・行政・司法を担う仕組みを何というでしょう？",a:"三権分立",ok:["三権分立","さんけんぶんりつ"]},
+{g:"社会",q:"国際連合の本部が置かれているアメリカの都市はどこでしょう？",a:"ニューヨーク",ok:["ニューヨーク","にゅーよーく","NY"]},
+{g:"社会",q:"日本の消費税が初めて導入された1989年、その税率は何パーセントだったでしょう？",a:"3パーセント",ok:["3パーセント","3%","3","さんぱーせんと","3％"]},
+{g:"社会",q:"日本の衆議院議員の任期は何年でしょう？",a:"4年",ok:["4年","4","よねん","四年"]},
+{g:"社会",q:"EUの共通通貨は何でしょう？",a:"ユーロ",ok:["ユーロ","ゆーろ","euro"]},
+{g:"言葉",q:"「石の上にも三年」という言葉がありますが、「三人寄れば」何の知恵というでしょう？",a:"文殊",ok:["文殊","もんじゅ","文殊の知恵","もんじゅのちえ"]},
+{g:"言葉",q:"アルファベット26文字のうち、最初から数えて10番目の文字は何でしょう？",a:"J",ok:["J","j","ジェイ","じぇい"]},
+{g:"言葉",q:"「光陰矢の如し」の「光陰」とは何のことでしょう？",a:"月日（時間）",ok:["月日","つきひ","時間","じかん","歳月","さいげつ","時"]},
+{g:"言葉",q:"「猿も木から落ちる」と同じ意味のことわざで、「弘法も」何の誤りというでしょう？",a:"筆",ok:["筆","ふで","筆の誤り","ふでのあやまり"]},
+{g:"言葉",q:"十二支の最初は「子」ですが、最後は何でしょう？",a:"亥",ok:["亥","い","いのしし"]},
+{g:"言葉",q:"漢字の部首で、「海」「池」などに共通する「氵」を何というでしょう？",a:"さんずい",ok:["さんずい","三水"]},
+{g:"スポーツ",q:"サッカーで、1チームがピッチに出せる選手の人数は何人でしょう？",a:"11人",ok:["11人","11","じゅういちにん","十一人"]},
+{g:"スポーツ",q:"野球で、投手が投げた球を打者が3回空振りなどで見逃し、アウトになることを何というでしょう？",a:"三振",ok:["三振","さんしん"]},
+{g:"スポーツ",q:"夏季オリンピックは何年ごとに開催されるでしょう？",a:"4年",ok:["4年","4","よねん","四年","4年ごと"]},
+{g:"スポーツ",q:"マラソンの正式な距離は、何キロ195メートルでしょう？",a:"42キロ",ok:["42","42キロ","42キロメートル","よんじゅうに","42.195"]},
+{g:"スポーツ",q:"相撲で、横綱の下の番付は何でしょう？",a:"大関",ok:["大関","おおぜき"]},
+{g:"スポーツ",q:"バスケットボールで、スリーポイントラインの外側から決めたシュートは何点でしょう？",a:"3点",ok:["3点","3","さんてん","三点"]},
+{g:"芸術",q:"「モナ・リザ」「最後の晩餐」を描いたルネサンス期の芸術家は誰でしょう？",a:"レオナルド・ダ・ヴィンチ",ok:["ダ・ヴィンチ","ダヴィンチ","だびんち","だゔぃんち","レオナルド・ダ・ヴィンチ","レオナルドダヴィンチ","レオナルド"]},
+{g:"芸術",q:"「運命」「第九」などの交響曲で知られ、晩年は耳が聞こえなかったドイツの作曲家は誰でしょう？",a:"ベートーヴェン",ok:["ベートーヴェン","ベートーベン","べーとーべん","べーとーゔぇん"]},
+{g:"芸術",q:"「富嶽三十六景」で知られる江戸時代の浮世絵師は誰でしょう？",a:"葛飾北斎",ok:["葛飾北斎","かつしかほくさい","北斎"]},
+{g:"芸術",q:"「ひまわり」や「星月夜」を描いたオランダ出身の画家は誰でしょう？",a:"ゴッホ",ok:["ゴッホ","ごっほ","フィンセント・ファン・ゴッホ","ファン・ゴッホ"]},
+{g:"芸術",q:"弦楽器で、ヴァイオリンより大きくチェロより小さい楽器は何でしょう？",a:"ヴィオラ",ok:["ヴィオラ","ビオラ","びおら","ゔぃおら"]},
+{g:"生活",q:"日本の祝日で、1月の第2月曜日は何の日でしょう？",a:"成人の日",ok:["成人の日","せいじんのひ"]},
+{g:"生活",q:"トランプのカードは、ジョーカーを除くと全部で何枚でしょう？",a:"52枚",ok:["52枚","52","ごじゅうにまい","五十二枚"]},
+{g:"生活",q:"将棋で、相手の王将を動けなくして勝つことを何というでしょう？",a:"詰み",ok:["詰み","つみ","詰","王手詰み"]},
+{g:"生活",q:"郵便番号は、ハイフンの前が3桁、後ろが何桁でしょう？",a:"4桁",ok:["4桁","4","よんけた","四桁"]},
+{g:"生活",q:"1年のうち、日の出から日の入りまでの時間が最も短い日を何というでしょう？",a:"冬至",ok:["冬至","とうじ"]},
+{g:"生活",q:"緑茶・紅茶・ウーロン茶はすべて同じ植物の葉からつくられますが、その植物の名前は何でしょう？",a:"チャノキ",ok:["チャノキ","茶の木","ちゃのき","茶","チャ"]},
+{g:"数学",q:"円周率を小数で表したとき、小数点以下第3位の数字は何でしょう？",a:"1",ok:["1","いち","一"]},
+{g:"数学",q:"1から10までの整数をすべて足すといくつでしょう？",a:"55",ok:["55","ごじゅうご","五十五"]},
+{g:"数学",q:"三角形の内角の和は180度ですが、四角形の内角の和は何度でしょう？",a:"360度",ok:["360度","360","さんびゃくろくじゅうど"]},
+{g:"数学",q:"1以外に約数を持たない、1より大きい自然数を何というでしょう？",a:"素数",ok:["素数","そすう"]},
+{g:"数学",q:"2の10乗はいくつでしょう？",a:"1024",ok:["1024","せんにじゅうよん"]},
+];
+
+// --- 正規化：カタカナ→ひらがな、全角英数→半角、記号除去 ---
+function norm(s){
+  s=(s||"").trim().toLowerCase();
+  s=s.replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+  s=s.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  s=s.replace(/[\s　・･=＝\-ー－~〜、。,.「」『』()（）]/g,"");
+  s=s.replace(/ヴ|ゔ/g,"ぶ");
+  return s;
+}
+function judge(input,q){
+  const n=norm(input); if(!n) return false;
+  return q.ok.some(o=>norm(o)===n) || norm(q.a)===n;
+}
+
+// --- 状態 ---
+const $=id=>document.getElementById(id);
+const S={mode:"73",deck:[],idx:0,phase:"idle",pos:0,text:"",tick:null,ans:null,o:0,x:0,n:0,posSum:0,marks:[],answerTimer:null,passTimer:null};
+const CPS=5; // 読み上げ速度（文字/秒）
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function reset(){
+  Object.assign(S,{deck:shuffle(QUESTIONS.slice()),idx:0,phase:"idle",o:0,x:0,n:0,posSum:0,marks:[],pos:0,text:""});
+  clearTimers();
+  $("log").innerHTML=""; $("resultBox").hidden=true;
+  $("qText").innerHTML='<span class="cur"></span>'; $("qGenre").textContent="—";
+  $("state").className="state"; $("state").innerHTML='「出題」を押すか <kbd>Enter</kbd> で開始。読み上げ中に <kbd>Space</kbd> で早押し。';
+  $("sWin").textContent=S.mode==="73"?"7":S.mode==="10"?"10問":"∞";
+  $("stPool").textContent=QUESTIONS.length;
+  $("btnStart").disabled=false;
+  render();
+}
+function clearTimers(){stopRec();clearTimeout(S.retry);clearInterval(S.tick);clearTimeout(S.answerTimer);clearTimeout(S.passTimer);$("timer").hidden=true}
+function render(){
+  $("sO").textContent=S.o;$("sX").textContent=S.x;$("stN").textContent=S.n;
+  $("stRate").textContent=S.n?Math.round(S.o/S.n*100)+"%":"—";
+  $("stPos").textContent=S.o?Math.round(S.posSum/S.o)+"%":"—";
+  $("marks").innerHTML=S.marks.map(m=>`<b class="${m}">${m==="o"?"○":m==="x"?"×":"－"}</b>`).join("");
+  $("qLabel").textContent=`第${S.idx+1}問`;
+  const reading=S.phase==="reading",buzzed=S.phase==="buzzed";
+  $("btnStart").disabled=!(S.phase==="idle"||S.phase==="done_q");
+  $("btnBuzz").disabled=!reading;
+  $("btnPass").disabled=!(reading||S.phase==="readend");
+  $("ans").disabled=!buzzed;$("btnAns").disabled=!buzzed;
+}
+function drawText(){
+  const shown=S.text.slice(0,S.pos);
+  $("qText").innerHTML=esc(shown)+(S.pos<S.text.length?'<span class="cur"></span>':"");
+}
+function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function setState(cls,html){$("state").className="state "+cls;$("state").innerHTML=html}
+
+function start(){
+  ac();
+  if(!($("btnStart").disabled===false))return;
+  if(S.idx>=S.deck.length){S.deck=shuffle(QUESTIONS.slice());S.idx=0}
+  const q=S.deck[S.idx];
+  S.phase="reading";S.pos=0;S.text=q.q;
+  $("qGenre").textContent=q.g;
+  setState("","読み上げ中…");
+  $("resultBox").hidden=true;
+  render();drawText();
+  clearTimers();
+  startRec();
+  S.tick=setInterval(()=>{
+    S.pos++;drawText();
+    if(S.pos>=S.text.length){clearInterval(S.tick);S.phase="readend";render();
+      setState("warn","読み終わり。10秒以内に押してください");
+      S.passTimer=setTimeout(()=>pass(true),10000);
+      startBar(10000);
+      // readend でもまだ押せる
+      $("btnBuzz").disabled=false;
+    }
+  },1000/CPS);
+}
+function startBar(ms){
+  const bar=$("timerBar");$("timer").hidden=false;
+  bar.style.transition="none";bar.style.transform="scaleX(1)";
+  requestAnimationFrame(()=>{bar.style.transition=`transform ${ms}ms linear`;bar.style.transform="scaleX(0)"});
+}
+// --- 音声認識：問題の読み上げ開始と同時に聞き始め、押したあとの発話で判定。1問ごとに作り直す ---
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+S.voice=false;S.limit=5000;S.rec=null;
+function stopRec(){ if(S.rec){const r=S.rec;S.rec=null;try{r.onend=null;r.onresult=null;r.abort()}catch(e){}} }
+function judgeVoice(t,q){
+  if(judge(t,q))return true;
+  const n=norm(t);
+  return q.ok.concat([q.a]).some(o=>{const m=norm(o);return m.length>=2&&n.includes(m)});
+}
+function micMsg(t){$("mic").hidden=!S.voice;$("micText").textContent=t}
+function startRec(){
+  if(!S.voice||!SR)return;
+  stopRec();
+  const r=new SR();r.lang="ja-JP";r.interimResults=true;r.continuous=true;r.maxAlternatives=5;
+  r.onresult=ev=>{
+    let latest="",final=false;
+    for(let i=ev.resultIndex;i<ev.results.length;i++){latest=ev.results[i][0].transcript;final=ev.results[i].isFinal}
+    micMsg(latest);
+    if(S.phase!=="buzzed")return;
+    const q=S.deck[S.idx];
+    let best="";
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const res=ev.results[i];
+      for(let k=0;k<res.length;k++){const t=res[k].transcript;if(judgeVoice(t,q)){best=t;break}}
+      if(best)break;
+      best=res[0].transcript;
+    }
+    $("ans").value=best;
+    if(judgeVoice(best,q)){finish(true,best)}
+    else if(final){clearTimeout(S.retry);S.retry=setTimeout(()=>{if(S.phase==="buzzed")finish(false,best)},1500)}
+  };
+  r.onstart=()=>micMsg("（聞き取り中）");
+  r.onerror=ev=>{
+    if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){S.voice=false;$("voice").setAttribute("aria-pressed","false");
+      setState("bad","マイクが使えません。アドレスバー左のアイコンからマイクを「許可」にしてください");micMsg("")}
+    else if(ev.error!=="no-speech"&&ev.error!=="aborted")micMsg("認識エラー: "+ev.error);
+  };
+  // 無音などで勝手に終わったら、読み上げ中・解答中なら立ち上げ直す
+  r.onend=()=>{ if(S.rec===r){S.rec=null;if(S.voice&&(S.phase==="reading"||S.phase==="readend"||S.phase==="buzzed"))setTimeout(startRec,100)} };
+  S.rec=r;try{r.start()}catch(e){S.rec=null;micMsg("起動失敗: "+e.message)}
+}
+function buzz(){
+  if(S.phase!=="reading"&&S.phase!=="readend")return;
+  clearInterval(S.tick);clearTimeout(S.passTimer);
+  S.buzzPos=Math.round(S.pos/S.text.length*100);
+  S.phase="buzzed";render();play("buzz");
+  const sec=S.limit/1000;
+  setState("warn",`押した！（${S.buzzPos}%地点）${S.voice&&SR?"声で":""}${sec}秒以内に解答`);
+  $("ans").value="";
+  if(S.voice&&SR){if(!S.rec)startRec();micMsg("どうぞ")}else{$("ans").focus()}
+  startBar(S.limit);
+  S.answerTimer=setTimeout(()=>{const v=$("ans").value;finish(v?judge(v,S.deck[S.idx]):false,v||"時間切れ")},S.limit);
+}
+function submit(e){
+  e.preventDefault();if(S.phase!=="buzzed")return;
+  clearTimeout(S.answerTimer);
+  const q=S.deck[S.idx],v=$("ans").value;
+  finish(judge(v,q),v||"（無回答）");
+}
+function finish(correct,given){
+  stopRec();clearTimeout(S.retry);clearTimeout(S.answerTimer);
+  if(S.phase!=="buzzed")return;
+  const q=S.deck[S.idx];
+  $("timer").hidden=true;
+  S.n++;
+  play(correct?"good":"bad");
+  if(correct){S.o++;S.posSum+=S.buzzPos;S.marks.push("o");
+    setState("good",`正解！ ${q.a}`);
+  }else{S.x++;S.marks.push("x");
+    setState("bad",`不正解（${esc(given)}）　正解：${q.a}`);
+  }
+  S.pos=S.text.length;drawText();
+  addLog(correct?"o":"x",q,given);
+  S.phase="done_q";S.idx++;render();
+  checkEnd();
+}
+function pass(auto){
+  if(S.phase!=="reading"&&S.phase!=="readend")return;
+  clearTimers();
+  const q=S.deck[S.idx];
+  S.n++;S.marks.push("-");play("pass");
+  S.pos=S.text.length;drawText();
+  setState("",`${auto?"時間切れで":""}スルー　正解：${q.a}`);
+  addLog("-",q,"スルー");
+  S.phase="done_q";S.idx++;render();checkEnd();
+}
+function addLog(m,q,given){
+  const li=document.createElement("li");li.className=m;
+  li.innerHTML=`${esc(q.a)} <span>／ ${esc(q.g)}${m==="o"?` ／ ${S.buzzPos}%で押下`:m==="x"?` ／ 解答「${esc(given)}」`:""}</span>`;
+  $("log").prepend(li);
+}
+function checkEnd(){
+  let t=null;
+  if(S.mode==="73"){
+    if(S.o>=7)t=["勝ち抜け！",`7○到達。誤答 ${S.x}、出題 ${S.n} 問、平均押し位置 ${Math.round(S.posSum/S.o)}%`];
+    else if(S.x>=3)t=["失格…",`3×。正解 ${S.o}、出題 ${S.n} 問`];
+  }else if(S.mode==="10"&&S.n>=10){
+    t=[`${S.o}／10 正解`,S.o?`平均押し位置 ${Math.round(S.posSum/S.o)}%`:"次はもっと早く押せるはず"];
+  }
+  if(t){setTimeout(()=>play(S.mode==="73"&&S.x>=3?"lose":"win"),700);S.phase="ended";$("resTitle").textContent=t[0];$("resBody").textContent=t[1];$("resultBox").hidden=false;$("btnStart").disabled=true;render();$("btnStart").disabled=true}
+}
+
+$("btnStart").onclick=start;$("btnBuzz").onclick=buzz;$("btnPass").onclick=()=>pass(false);
+$("form").onsubmit=submit;$("btnAgain").onclick=reset;
+for(const [id,m] of [["m73","73"],["m10","10"],["mFree","free"]]){
+  $(id).onclick=()=>{S.mode=m;["m73","m10","mFree"].forEach(i=>$(i).setAttribute("aria-pressed",i===id));reset()};
+}
+$("voice").onclick=()=>{
+  if(!SR){setState("bad","このブラウザは音声認識に対応していません。Chrome か Edge で開いてください");return}
+  S.voice=!S.voice;$("voice").setAttribute("aria-pressed",S.voice);
+  if(S.voice){
+    setState("good","声で解答：オン。出題と同時に聞き取りを始め、押したあとに言った言葉で判定します");
+    // ここで一度起動して、マイク許可を先に済ませる
+    try{const r=new SR();r.lang="ja-JP";r.onerror=ev=>{if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){S.voice=false;$("voice").setAttribute("aria-pressed","false");setState("bad","マイクが拒否されました。アドレスバー左のアイコンからマイクを「許可」にしてください")}};r.onstart=()=>{micMsg("マイクOK");setTimeout(()=>{try{r.abort()}catch(e){}},400)};r.start()}catch(e){}
+  }else{stopRec();micMsg("");setState("","声で解答：オフ")}
+};
+$("tlim").onclick=()=>{
+  S.limit=S.limit===5000?10000:S.limit===10000?3000:5000;
+  $("tlim").textContent=`解答${S.limit/1000}秒`;
+};
+// --- 効果音（WebAudioで合成。音源ファイル不要）---
+S.sound=true;let AC=null;
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==="suspended")AC.resume();return AC}
+function tone(f,t0,dur,type="square",vol=.18){
+  const c=ac();if(!c)return;const o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.setValueAtTime(f,c.currentTime+t0);
+  g.gain.setValueAtTime(0,c.currentTime+t0);g.gain.linearRampToValueAtTime(vol,c.currentTime+t0+.01);
+  g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t0+dur);
+  o.connect(g);g.connect(c.destination);o.start(c.currentTime+t0);o.stop(c.currentTime+t0+dur+.02);
+}
+const SFX={
+  buzz(){tone(1760,0,.09);tone(1760,.11,.09)},                 // ピッピッ（早押し）
+  good(){tone(1047,0,.12);tone(1319,.12,.12);tone(1568,.24,.12);tone(2093,.36,.3)}, // ピンポンピンポーン
+  bad(){tone(196,0,.45,"sawtooth",.14);tone(185,0,.45,"sawtooth",.1)},  // ブー
+  pass(){tone(523,0,.08,"triangle",.1);tone(392,.1,.15,"triangle",.1)}, // ポロン
+  win(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>tone(f,i*.11,.14,"square",.16))},
+  lose(){[392,370,349,330].forEach((f,i)=>tone(f,i*.18,.22,"sawtooth",.1))},
+};
+function play(k){if(S.sound&&SFX[k])SFX[k]()}
+$("snd").onclick=()=>{S.sound=!S.sound;$("snd").setAttribute("aria-pressed",S.sound);if(S.sound)play("buzz")};
+document.addEventListener("keydown",e=>{
+  if(e.target===$("ans"))return;
+  if(e.code==="Space"){e.preventDefault();buzz()}
+  else if(e.key==="Enter"&&(S.phase==="idle"||S.phase==="done_q")){e.preventDefault();start()}
+});
+reset();
+</script>
