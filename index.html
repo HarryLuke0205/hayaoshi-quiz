@@ -741,7 +741,9 @@ function tone(f,t0,dur,type="square",vol=.18){
 }
 const SFX={
   buzz(){tone(1760,0,.09);tone(1760,.11,.09)},                 // ピッピッ（早押し）
-  good(){tone(1047,0,.12);tone(1319,.12,.12);tone(1568,.24,.12);tone(2093,.36,.3)}, // ピンポンピンポーン
+  good(){ // ピンポンピンポーン：2つの波形を重ねて音量も上げる
+    [[1047,0,.14],[1319,.13,.14],[1568,.26,.14],[2093,.39,.45]].forEach(([f,t,d])=>{tone(f,t,d,"square",.42);tone(f,t,d,"triangle",.5);tone(f/2,t,d,"sine",.35)});
+  },
   bad(){tone(196,0,.45,"sawtooth",.14);tone(185,0,.45,"sawtooth",.1)},  // ブー
   pass(){tone(523,0,.08,"triangle",.1);tone(392,.1,.15,"triangle",.1)}, // ポロン
   win(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>tone(f,i*.11,.14,"square",.16))},
