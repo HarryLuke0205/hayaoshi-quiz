@@ -48,6 +48,9 @@ main{min-width:0;display:grid;gap:14px;align-content:start}
 .buzz{flex:1 1 220px;background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;font-size:1.4rem;font-weight:900;padding:18px;letter-spacing:.2em;box-shadow:0 4px 0 color-mix(in srgb,var(--accent) 60%,black)}
 .buzz:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--accent) 60%,black)}
 .buzz:disabled{opacity:.35;cursor:default;box-shadow:none}
+.btn.start{flex:1 1 180px;font-size:1.4rem;font-weight:900;letter-spacing:.2em;padding:18px;border:2px solid var(--fg);background:var(--fg);color:var(--bg);box-shadow:0 4px 0 color-mix(in srgb,var(--fg) 55%,black)}
+.btn.start:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--fg) 55%,black)}
+.btn.start:disabled{opacity:.3;box-shadow:none}
 .btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 16px;color:var(--fg);font-weight:500}
 .btn:hover{border-color:var(--fg)}
 .btn:disabled{opacity:.4;cursor:default}
@@ -108,7 +111,7 @@ kbd{font-family:var(--mono);border:1px solid var(--line);border-radius:4px;paddi
     <div class="state" id="state">「出題」を押すか <kbd>Enter</kbd> で開始。読み上げ中に <kbd>Space</kbd> で早押し。</div>
   </div>
   <div class="row">
-    <button class="btn" id="btnStart">出題</button>
+    <button class="btn start" id="btnStart">出題</button>
     <button class="buzz" id="btnBuzz" disabled>押す</button>
     <button class="btn" id="btnPass" disabled>スルー</button>
   </div>
@@ -502,7 +505,7 @@ function render(){
   $("stRate").textContent=S.n?Math.round(S.o/S.n*100)+"%":"—";
   $("stPos").textContent=S.o?Math.round(S.posSum/S.o)+"%":"—";
   $("marks").innerHTML=S.marks.map(m=>`<b class="${m}">${m==="o"?"○":m==="x"?"×":"－"}</b>`).join("");
-  $("qLabel").textContent=`${LEVELS[S.level].name}　第${S.idx+1}問`;
+  $("qLabel").textContent=`${LEVELS[S.level].name}　第${Math.min(S.idx+1,S.deck.length)}問 ／ 全${S.deck.length}問`;
   const reading=S.phase==="reading",buzzed=S.phase==="buzzed";
   $("btnStart").disabled=!(S.phase==="idle"||S.phase==="done_q");
   $("btnBuzz").disabled=!reading;
@@ -519,7 +522,14 @@ function setState(cls,html){$("state").className="state "+cls;$("state").innerHT
 function start(){
   ac();
   if(!($("btnStart").disabled===false))return;
-  if(S.idx>=S.deck.length){S.deck=shuffle(QUESTIONS.slice());S.idx=0}
+  if(S.idx>=S.deck.length){
+    // 全問出し切ったら、スコアも含めて最初から
+    const done=S.n,o=S.o;
+    reset();
+    setState("good",`全${done}問を出し切りました（正解 ${o}）。もう一度「出題」を押すと第1問から再開します`);
+    play("win");
+    return;
+  }
   const q=S.deck[S.idx];
   S.phase="reading";S.pos=0;S.text=q.q;
   $("qGenre").textContent=q.g;
